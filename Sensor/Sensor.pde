@@ -289,19 +289,10 @@ void sendFrame()
 }
 
 
-void setup()
+
+uint8_t joinOTAA()
 {
-  // put your setup code here, to run once:
-
-  //
-  // Set the time from the GPS.
-//  bool time_set = false;
-//  while (!time_set)
-//  {
-//    time_set = setTime();
-//  }
-
-  //
+   //
   // Set up module join OTAA.
   USB.ON();
 
@@ -475,8 +466,10 @@ void setup()
     USB.println(F("\n---------------------------------------------------------------"));
   }
   // set the Waspmote ID
-  frame.setID(moteID);
 }
+
+
+
 
 
 int writeDataToFile ()
@@ -505,6 +498,8 @@ int writeDataToFile ()
   strcat(data, ", ");
   sprintf(convert, "%d", sensor_value);
   strcat(data, convert);
+  // Print the data line
+  USB.println(data);
   // Turn on the SD card
   SD.ON();
   int err = 0;
@@ -533,6 +528,27 @@ int writeDataToFile ()
   return err;
 }
 
+void setup()
+{
+  // put your setup code here, to run once:
+
+  //
+  // Set the time from the GPS.
+  bool time_set = false;
+  time_set = setTime(); 
+  if  (time_set == false)
+  {
+    error_code = 1;
+  }
+  //
+  // Perform LoRaWAN OTAA join
+  joinOTAA();
+  
+  frame.setID(moteID);
+}
+
+
+
 void loop()
 {
   // put your main code here, to run repeatedly:
@@ -542,20 +558,17 @@ void loop()
   RTC.ON();
   sample_time = RTC.getEpochTime();
   //
-  // Set the interrrupt alarm for 10 minutes
-  RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
   RTC.OFF();
-//  if (sample_time > (time_sync + 604800))
+//  if (sample_time > (time_sync +  2419200))
 //  {
 //    bool time_set = false;
-//    while (!time_set)
-//    {
-//      time_set = setTime();
-//    }
+//    time_set = setTime();
 //    RTC.ON();
 //    sample_time = RTC.getEpochTime();
 //    RTC.OFF();
 //  }
+  // Set the interrrupt alarm for 10 minutes
+  RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
   //
   // Read the sensor
   readSensor();
