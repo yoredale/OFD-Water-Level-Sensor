@@ -18,7 +18,7 @@
 
 var TYPE_BAT        = 0x34; //Battery 1 byte  0-100%
 var TYPE_CLOOP      = 0x3d; //Current loop 0-1023
-
+var TYPE_SDERR      = 0x13; //Error code for SD card
 
 function bin16dec(bin) {
     var num=bin&0xFFFF;
@@ -43,6 +43,11 @@ function DecodeElsysPayload(data){
 	//console.log(data.length);
         //console.log(data[i]);
         switch(data[i]){
+        case TYPE_SDERR: // SD Error Code
+            var sd_err=(data[i+1]);
+            obj.sd_err=sd_err;
+            i+=1;
+            break;
         case TYPE_BAT: // Battery Level
             var bat=(data[i+1]);
             obj.battery_level=bat;

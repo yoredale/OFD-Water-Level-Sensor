@@ -52,7 +52,6 @@ timestamp_t   time;
 unsigned long time_sync;
 unsigned long sample_time;
 uint16_t sensor_value;
-float current;
 char moteID[] = "OFD1";
 char sensor_message[8];
 char data[17];
@@ -96,11 +95,13 @@ bool setTime()
   }
 }
 
+
+
 //
 // Read the sensor value from the 4-20mA board and store it
 // in sensor_value
 
-void readSensor()
+uint8_t readSensor()
 {
   // Sets the 5V switch ON
   currentLoopBoard.ON(SUPPLY5V);
@@ -113,25 +114,29 @@ void readSensor()
   {
     // Read the sensor
     sensor_value =  currentLoopBoard.readChannel(CHANNEL1);
-    current = currentLoopBoard.readCurrent(CHANNEL1);
-    current = current;
     delay(100);
+     //
+    // Sets the 12V switch OFF
+    currentLoopBoard.OFF(SUPPLY12V);
+    delay(100);
+
+    // Turn off the 4-20mA board
+    currentLoopBoard.OFF(SUPPLY5V);
   }
   else
   {
-    sensor_value = -1;
-    current = -1;
-  }
-  USB.println(current);
-  USB.println(sensor_value);
-  //
-  // Sets the 12V switch OFF
-  currentLoopBoard.OFF(SUPPLY12V);
-  delay(100);
+     //
+    // Sets the 12V switch OFF
+    currentLoopBoard.OFF(SUPPLY12V);
+    delay(100);
 
-  // Turn off the 4-20mA board
-  currentLoopBoard.OFF(SUPPLY5V);
-  delay(100);
+    // Turn off the 4-20mA board
+    currentLoopBoard.OFF(SUPPLY5V);
+    sensor_value = 0;
+    return 1;
+  }
+  USB.println(sensor_value);
+  return 0;
 }
 
 
@@ -151,6 +156,12 @@ void buildFrame()
   // so we'll use SENSOR_RAM, which is 2 byte INT sensor type with ID 61
   // 
   frame.addSensor(SENSOR_RAM, (sensor_value) );
+  //
+  // If we have an error code to transmit, add an error frame using SENSOR_HALL with ID 
+  if (error_code > 0)
+  {
+    frame.addSensor(SENSOR_HALL, error_code);
+  }
   // frame.addSensor(SENSOR_CU, current);
   // Print frame
   frame.showFrame();
@@ -472,7 +483,7 @@ uint8_t joinOTAA()
 
 
 
-int writeDataToFile ()
+uint8_t writeDataToFile ()
 {
   char data[26];
   char convert[5];
@@ -554,7 +565,10 @@ void loop()
   // put your main code here, to run repeatedly:
 
   //
-  // Check the current time, if it's been more than a week resync with the GPS.
+  // Reset the error code.
+  error_code = 0;
+  //
+  // Check the current time, if it's been more than a 4 weeks resync with the GPS.
   RTC.ON();
   sample_time = RTC.getEpochTime();
   //
@@ -573,11 +587,11 @@ void loop()
   // Read the sensor
   readSensor();
   //
+  // Write the sensor reading to the SD card
+  error_code = writeDataToFile ();
+  //
   // Build the frame to send
   buildFrame();
-  //
-  // Write the sensor reading to the SD card
-  writeDataToFile ();
   //
   // Send the frame over LoRaWAN
   sendFrame();
