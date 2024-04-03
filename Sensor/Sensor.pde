@@ -63,6 +63,9 @@ char data[17];
 
 bool setTime()
 {
+  RTC.ON();
+  USB.println(RTC.getTime());
+  RTC.OFF();
   bool gps_status;
   
   // set GPS ON  
@@ -85,6 +88,7 @@ bool setTime()
     GPS.setTimeFromGPS();
     // Update time_sync
     time_sync = RTC.getEpochTime();
+    USB.println(RTC.getTime());
     // Turn RTC off again.
     RTC.OFF();
     return true;
@@ -160,7 +164,7 @@ void buildFrame()
   // If we have an error code to transmit, add an error frame using SENSOR_HALL with ID 
   if (error_code > 0)
   {
-    frame.addSensor(SENSOR_HALL, error_code);
+    frame.addSensor(SENSOR_PS, error_code);
   }
   // frame.addSensor(SENSOR_CU, current);
   // Print frame
@@ -534,8 +538,10 @@ uint8_t writeDataToFile ()
   }
   else
   {
+    SD.OFF();
     return 1;
   }
+  SD.OFF();
   return err;
 }
 
@@ -548,10 +554,10 @@ void setup()
   bool time_set = false;
   time_set = setTime(); 
   if  (time_set == false)
-  {
+   {
     error_code = 1;
   }
-  //
+  
   // Perform LoRaWAN OTAA join
   joinOTAA();
   
@@ -573,16 +579,16 @@ void loop()
   sample_time = RTC.getEpochTime();
   //
   RTC.OFF();
-//  if (sample_time > (time_sync +  2419200))
-//  {
-//    bool time_set = false;
-//    time_set = setTime();
-//    RTC.ON();
-//    sample_time = RTC.getEpochTime();
-//    RTC.OFF();
-//  }
+  if (sample_time > (time_sync +  2419200))
+  {
+    bool time_set = false;
+    time_set = setTime();
+    RTC.ON();
+    sample_time = RTC.getEpochTime();
+    RTC.OFF();
+  }
   // Set the interrrupt alarm for 10 minutes
-  RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
+  RTC.setAlarm1("00:00:02:00",RTC_OFFSET,RTC_ALM1_MODE2);
   //
   // Read the sensor
   readSensor();
