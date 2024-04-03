@@ -46,7 +46,9 @@ uint8_t PORT = 3;
 // variable
 uint8_t error;
 uint8_t error_config = 0;
+uint8_t error_code = 0;
 
+timestamp_t   time;
 unsigned long time_sync;
 unsigned long sample_time;
 uint16_t sensor_value;
@@ -477,6 +479,59 @@ void setup()
 }
 
 
+int writeDataToFile ()
+{
+  char data[26];
+  char convert[5];
+  // Break Epoch time into UTC time
+  RTC.breakTimeAbsolute( sample_time, &time );
+  sprintf(convert, "%d", time.year);
+  strcat(data, convert);
+  strcat(data, "-");
+  sprintf(convert, "%d", time.month);
+  strcat(data, convert);
+  strcat(data, "-");
+  sprintf(convert, "%d", time.date);
+  strcat(data, convert);
+  strcat(data, " ");
+  sprintf(convert, "%d", time.hour);
+  strcat(data, convert);
+  strcat(data, ":"),
+  sprintf(convert, "%d", time.minute);
+  strcat(data, convert);
+  strcat(data, ":");
+  sprintf(convert, "%d", time.second);
+  strcat(data, convert);
+  strcat(data, ", ");
+  sprintf(convert, "%d", sensor_value);
+  strcat(data, convert);
+  // Turn on the SD card
+  SD.ON();
+  int err = 0;
+  char path[8];
+  sprintf(path, "%d", time.year);
+  char filename[3];
+  sprintf(filename, "%d", time.month);
+  if (SD.goRoot())
+  {
+    if (!SD.isDir(path))
+    {
+      err = err + SD.mkdir(path);
+    }
+    strcat(path, "/");
+    strcat(path,filename);
+    if (!SD.isFile(path)) 
+    {
+      err = err + SD.create(path);
+    }
+    err = err + SD.appendln(path, data);
+  }
+  else
+  {
+    return 1;
+  }
+  return err;
+}
 
 void loop()
 {
@@ -486,6 +541,9 @@ void loop()
   // Check the current time, if it's been more than a week resync with the GPS.
   RTC.ON();
   sample_time = RTC.getEpochTime();
+  //
+  // Set the interrrupt alarm for 10 minutes
+  RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
   RTC.OFF();
 //  if (sample_time > (time_sync + 604800))
 //  {
@@ -505,7 +563,18 @@ void loop()
   // Build the frame to send
   buildFrame();
   //
+  // Write the sensor reading to the SD card
+  writeDataToFile ();
+  //
   // Send the frame over LoRaWAN
   sendFrame();
-  delay(60000);
+  //
+  // Put Waspmote to sleep.
+  PWR.sleep(ALL_OFF);
+  if( intFlag & RTC_INT )
+  {
+    intFlag &= ~(RTC_INT); // Clear flag
+    Utils.blinkLEDs(1000); // Blinking LEDs
+    Utils.blinkLEDs(1000); // Blinking LEDs
+  } 
 }
