@@ -276,6 +276,13 @@
 #define FEVER_RESULT    				199
 
 
+
+// Custome sensor fields
+#define SENSOR_SWCC_CLOOP                               200   // Current Loop (0-1023)
+#define SENSOR_SWCC_SD_ERR                              201   // SD card error
+#define SENSOR_SWCC_TS_ERR                              202   // Time sync error
+
+
 /// Flash defines //////////////////////////////////////////////////////////////
 
 
@@ -529,6 +536,11 @@ const char	str_frame_197[]  PROGMEM = "FEVER_COUNTER";
 const char	str_frame_198[]  PROGMEM = "THRESHOLD";
 const char	str_frame_199[]  PROGMEM = "RESULT";
 
+//Custome fields for SWCC OFD level sensor
+const char      str_frame_200[] PROGMEM = "SWCC_CLOOP";
+const char      str_frame_201[] PROGMEM = "SWCC_SD_ERR";
+const char      str_frame_202[] PROGMEM = "SWCC_TS_ERR";
+
 
 
 /*******************************************************************************
@@ -740,6 +752,9 @@ const char* const FRAME_SENSOR_TABLE[] PROGMEM=
 	str_frame_197,
 	str_frame_198,
 	str_frame_199,
+	str_frame_200,
+	str_frame_201,
+	str_frame_202,
 
 };
 
@@ -996,6 +1011,11 @@ const uint8_t FRAME_SENSOR_TYPE_TABLE[] PROGMEM=
 	2,	// 198
 	0,	// 199
 
+	// SWCC Custome Sensors
+	1,      // 200
+	0,      // 201
+	0,      // 202
+
 };
 
 
@@ -1246,6 +1266,11 @@ const uint8_t FRAME_SENSOR_FIELD_TABLE[] PROGMEM=
 	1,	// 197
 	1,	// 198
 	1,	// 199
+
+	//SWCC sustom sensors
+	1,      // 200
+        1,      // 201
+	1,      // 202
 };
 
 
@@ -1492,6 +1517,11 @@ const uint8_t FRAME_DECIMAL_TABLE[] PROGMEM =
 	0,	// 197
 	2,	// 198
 	0,	// 199
+
+	// SWCC Custom Sensors
+	0,      // 200 Current Loop Value
+	0,      // 201 SD card error
+	0,      // 202 Time Sync Error
 
 };
 

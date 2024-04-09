@@ -46,10 +46,11 @@ uint8_t PORT = 3;
 // variable
 uint8_t error;
 uint8_t error_config = 0;
-uint8_t error_code = 0;
+uint8_t sd_error = 0;
+uint8_t ts_error = 0;
 
 timestamp_t   time;
-unsigned long time_sync;
+unsigned long time_sync = 0;
 unsigned long sample_time;
 uint16_t sensor_value;
 char moteID[] = "OFD1";
@@ -61,7 +62,7 @@ char data[17];
 
 // This uses the GPS to set the RTC and record the time it happened
 
-bool setTime()
+uint8_t setTime()
 {
   RTC.ON();
   USB.println(RTC.getTime());
@@ -89,14 +90,32 @@ bool setTime()
     // Update time_sync
     time_sync = RTC.getEpochTime();
     USB.println(RTC.getTime());
+    // set the sample time to the new synchronised time
+    sample_time = time_sync;
     // Turn RTC off again.
     RTC.OFF();
-    return true;
+    //
+    // Time synced succesfully, clear tje ts_error code
+    ts_error = 0;
   }
   else
-  { 
-    return false;
+  {
+    if (time_sync == 0)
+      {
+	//
+	// time sync has never succeeded RTC has never synced
+	ts_error = 1;
+      }
+    else
+      {
+	//
+	// time sync has succeeded in the past but not this time
+	// RTC is likely only slightly out. 
+	ts_error = 2;
+      }
   }
+  
+  return ts_error;
 }
 
 
@@ -144,6 +163,7 @@ uint8_t readSensor()
 }
 
 
+
 //
 // build a data frame with sensor_value and the battery level
 // ready to transmit.
@@ -155,17 +175,24 @@ void buildFrame()
   // set frame fields (Battery sensor - uint8_t)
   frame.addSensor(SENSOR_BAT, PWR.getBatteryLevel());
   //
-  // Waspmote doesn't define a generic INT sensor value or a value
-  // for the 4 to 20 mA sensor. I can't be bothered to define a new sensor type
-  // so we'll use SENSOR_RAM, which is 2 byte INT sensor type with ID 61
-  // 
-  frame.addSensor(SENSOR_RAM, (sensor_value) );
+  // Waspmote doesn't define a sensor type for the current loop value
+  // It does define one for the current loop current reading.
+  // We've defined a custom sensor type in WaspFrameConstantsv15.h
+  // for the current loop value. ID 200
+  frame.addSensor(SENSOR_SWCC_CLOOP, (sensor_value) );
   //
-  // If we have an error code to transmit, add an error frame using SENSOR_HALL with ID 
-  if (error_code > 0)
+  // If we have an SD card error, add an SD_ERR, ID 201
+  if (sd_error > 0)
   {
-    frame.addSensor(SENSOR_PS, error_code);
+    frame.addSensor(SENSOR_SWCC_SD_ERR, ts_error);
   }
+  // If we have a time sync error (eg GPS not syncing), add a TS_ERR, ID 202 
+  if (ts_error > 0)
+  {
+    frame.addSensor(SENSOR_SWCC_TS_ERR, ts_error);
+  }
+  
+  
   // frame.addSensor(SENSOR_CU, current);
   // Print frame
   frame.showFrame();
@@ -517,47 +544,65 @@ uint8_t writeDataToFile ()
   USB.println(data);
   // Turn on the SD card
   SD.ON();
-  int err = 0;
-  char path[8];
-  sprintf(path, "%d", time.year);
-  char filename[3];
-  sprintf(filename, "%d", time.month);
-  if (SD.goRoot())
-  {
-    if (!SD.isDir(path))
+  if (SD.isSD())
     {
-      err = err + SD.mkdir(path);
+      char path[8];
+      sprintf(path, "%d", time.year);
+      char filename[3];
+      sprintf(filename, "%d", time.month);
+      if (SD.goRoot())
+	{
+	  if (!SD.isDir(path))
+	    {
+	      if (!SD.mkdir(path))
+		{
+		  // mkdir failed, return 3
+		  SD.OFF();
+		  return 3;
+		}
+	    }
+	  strcat(path, "/");
+	  strcat(path,filename);
+	  if (!SD.isFile(path)) 
+	    {
+	      if (!SD.create(path))
+		{
+		  // file creation failed, return 4
+		  SD.OFF();
+		  return 4;
+		}
+	    }
+	  if (!SD.appendln(path, data))
+	    {
+	      // append to file failed, return 5
+	      SD.OFF();
+	      return 5;
+	    }
+	}
+      else
+	{
+	  // failed to change to root directory, return 2
+	  SD.OFF();
+	  return 2;
+	}
+      // Write succeeded, return 0
+      SD.OFF();
+      return 0;
     }
-    strcat(path, "/");
-    strcat(path,filename);
-    if (!SD.isFile(path)) 
-    {
-      err = err + SD.create(path);
-    }
-    err = err + SD.appendln(path, data);
-  }
   else
-  {
-    SD.OFF();
-    return 1;
-  }
-  SD.OFF();
-  return err;
+    {
+      // Card not present, return 1
+      SD.OFF();
+      return 1;
+    }
 }
+
+
 
 void setup()
 {
   // put your setup code here, to run once:
 
-  //
-  // Set the time from the GPS.
-  bool time_set = false;
-  time_set = setTime(); 
-  if  (time_set == false)
-   {
-    error_code = 1;
-  }
-  
   // Perform LoRaWAN OTAA join
   joinOTAA();
   
@@ -571,21 +616,13 @@ void loop()
   // put your main code here, to run repeatedly:
 
   //
-  // Reset the error code.
-  error_code = 0;
-  //
   // Check the current time, if it's been more than a 4 weeks resync with the GPS.
   RTC.ON();
   sample_time = RTC.getEpochTime();
-  //
   RTC.OFF();
   if (sample_time > (time_sync +  2419200))
   {
-    bool time_set = false;
-    time_set = setTime();
-    RTC.ON();
-    sample_time = RTC.getEpochTime();
-    RTC.OFF();
+    setTime();
   }
   // Set the interrrupt alarm for 10 minutes
   RTC.setAlarm1("00:00:02:00",RTC_OFFSET,RTC_ALM1_MODE2);
@@ -594,7 +631,7 @@ void loop()
   readSensor();
   //
   // Write the sensor reading to the SD card
-  error_code = writeDataToFile ();
+  sd_error = writeDataToFile ();
   //
   // Build the frame to send
   buildFrame();
