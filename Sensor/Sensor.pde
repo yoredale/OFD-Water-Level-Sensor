@@ -47,7 +47,7 @@ uint8_t PORT = 3;
 uint8_t error;
 uint8_t error_config = 0;
 uint8_t sd_error = 0;
-uint8_t ts_error = 0;
+uint8_t ts_error = 1;
 
 timestamp_t   time;
 unsigned long time_sync = 0;
@@ -90,28 +90,28 @@ uint8_t setTime()
     // Update time_sync
     time_sync = RTC.getEpochTime();
     USB.println(RTC.getTime());
-    // set the sample time to the new synchronised time
-    sample_time = time_sync;
     // Turn RTC off again.
     RTC.OFF();
     //
-    // Time synced succesfully, clear tje ts_error code
+    // Time synced succesfully, clear the ts_error code
     ts_error = 0;
   }
   else
   {
     if (time_sync == 0)
       {
-	//
-	// time sync has never succeeded RTC has never synced
-	ts_error = 1;
+      	 //
+	       // time sync has never succeeded RTC has never synced
+	       ts_error = 1;
       }
     else
       {
-	//
-	// time sync has succeeded in the past but not this time
-	// RTC is likely only slightly out. 
-	ts_error = 2;
+	       //
+	       // time sync has succeeded in the past but not this time
+	       // RTC is likely only slightly out. Add 25 hours to time_sync
+         // so it doesn't attempt it again until tomorrow + 1 hour.
+         time_sync = time_sync + 86400;
+	       ts_error = 2;
       }
   }
   
@@ -184,7 +184,7 @@ void buildFrame()
   // If we have an SD card error, add an SD_ERR, ID 201
   if (sd_error > 0)
   {
-    frame.addSensor(SENSOR_SWCC_SD_ERR, ts_error);
+    frame.addSensor(SENSOR_SWCC_SD_ERR, sd_error);
   }
   // If we have a time sync error (eg GPS not syncing), add a TS_ERR, ID 202 
   if (ts_error > 0)
@@ -518,8 +518,7 @@ uint8_t writeDataToFile ()
 {
   char data[26];
   char convert[5];
-  // Break Epoch time into UTC time
-  RTC.breakTimeAbsolute( sample_time, &time );
+  // Generate the time information to record from the timestamp.
   sprintf(convert, "%d", time.year);
   strcat(data, convert);
   strcat(data, "-");
@@ -620,12 +619,8 @@ void loop()
   RTC.ON();
   sample_time = RTC.getEpochTime();
   RTC.OFF();
-  if (sample_time > (time_sync +  2419200))
-  {
-    setTime();
-  }
-  // Set the interrrupt alarm for 10 minutes
-  RTC.setAlarm1("00:00:02:00",RTC_OFFSET,RTC_ALM1_MODE2);
+ 
+
   //
   // Read the sensor
   readSensor();
@@ -638,8 +633,61 @@ void loop()
   //
   // Send the frame over LoRaWAN
   sendFrame();
+ // Break Epoch time into UTC time
+  RTC.breakTimeAbsolute( sample_time, &time );
+  //
+  // Set the interrrupt alarm for 10 minutes, divide the
+  // current minutes past the hour by 10 to get the number
+  // of tens of minutes past the hour, then set the alarm
+  // to the next 10 minute. This should result in waking
+  // up every 10 minutes without needing to account for the
+  // time the code takes to run in each wakeup cycle.
+  //  int ten_mins = time.minutes  / 10;
+  switch (time.minute / 10)
+    {
+    case 0: // Set alarm for 10 past the hour
+      RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      //
+      // Check if the RTC needs syncronising. Putting this check here
+      // means this is only attempted once per hour, limiting the
+      // drain from the battery if GPS is failing.
+      //
+      // If it's been more than 4 weeks since the last syncronisation,
+      // then syncronise the clock to the GPS.
+      if (sample_time > (time_sync +  2419200))
+      {
+        setTime();
+      }
+      break;
+  
+    case 1: // Set alarm for 20 past the hour
+      RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      break;
+
+    case 2: // Set alarm for half past the hour
+      RTC.setAlarm1("00:00:30:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      break;
+      
+    case 3: // Set alarm for 20 to the hour
+      RTC.setAlarm1("00:00:40:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      break;
+
+    case 4: // Set alarm to 10 to the hour
+      RTC.setAlarm1("00:00:50:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      break;
+
+    case 5: // set alarm for the hour
+      RTC.setAlarm1("00:00:00:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      break;
+
+    default: // this should never happen... set alarm for 10 minutes
+      RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
+      break;
+    }
   //
   // Put Waspmote to sleep.
+  USB.print("Going to sleep uptil: ");
+  USB.println(RTC.getAlarm1());
   PWR.sleep(ALL_OFF);
   if( intFlag & RTC_INT )
   {
