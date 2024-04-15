@@ -70,7 +70,7 @@ uint8_t setTime()
   bool gps_status;
   
   // set GPS ON  
-  GPS.ON(); 
+  GPS.ON();
 
   bool status = false;
   //////////////////////////////////////////////////////
@@ -114,7 +114,7 @@ uint8_t setTime()
 	       ts_error = 2;
       }
   }
-  
+  GPS.OFF();
   return ts_error;
 }
 
