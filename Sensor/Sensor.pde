@@ -646,7 +646,7 @@ void loop()
   switch (time.minute / 10)
     {
     case 0: // Set alarm for 10 past the hour
-      RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      
       //
       // Check if the RTC needs syncronising. Putting this check here
       // means this is only attempted once per hour, limiting the
@@ -657,6 +657,28 @@ void loop()
       if (sample_time > (time_sync +  2419200))
       {
         setTime();
+        //
+        // We need to check if the GPS time sync has taken us beyond the next wakeup time,
+        // otherwise it won't wake up again for another hour. This only happens if we first turn on
+        // the waspmote between the hour and 10 past.
+        RTC.ON();
+        sample_time = RTC.getEpochTime();
+        RTC.OFF();
+        RTC.breakTimeAbsolute( sample_time, &time );       
+        if (time.minute >= 10)
+        {
+          RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+        }
+        else
+        {
+          //
+          // If we haven't updated the time then set the alarm for 10 past.
+          RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+        }
+      }
+      else
+      {
+        RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       }
       break;
   
