@@ -681,6 +681,9 @@ uint8_t writeDataToFile ()
 
 void setup()
 {
+  RTC.ON();
+  RTC.setWatchdog(10);
+  RTC.OFF();
   // put your setup code here, to run once:
 
   // Perform LoRaWAN OTAA join
@@ -725,6 +728,9 @@ void loop()
   // up every 10 minutes without needing to account for the
   // time the code takes to run in each wakeup cycle.
   //  int ten_mins = time.minutes  / 10;
+  //
+  // Clear the watchdog before resetting it.
+  RTC.unSetWatchdog();
   switch (time.minute / 10)
     {
     case 0: // Set alarm for 10 past the hour
@@ -738,54 +744,67 @@ void loop()
       // then syncronise the clock to the GPS.
       if (sample_time > (time_sync +  2419200))
       {
+        RTC.ON();
+        RTC.setWatchdog(6);
+        RTC.OFF();
         setTime();
         //
         // We need to check if the GPS time sync has taken us beyond the next wakeup time,
         // otherwise it won't wake up again for another hour. This only happens if we first turn on
         // the waspmote between the hour and 10 past.
         RTC.ON();
+        RTC.unSetWatchdog();
         sample_time = RTC.getEpochTime();
         RTC.OFF();
         RTC.breakTimeAbsolute( sample_time, &time );       
         if (time.minute >= 10)
         {
           RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+          RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
         }
         else
         {
           //
           // If we haven't updated the time then set the alarm for 10 past.
           RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+          RTC.setAlarm2("00:00:13:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
         }
       }
       else
       {
         RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+        RTC.setAlarm2("00:00:13:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       }
       break;
   
     case 1: // Set alarm for 20 past the hour
       RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 2: // Set alarm for half past the hour
       RTC.setAlarm1("00:00:30:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:33:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
       
     case 3: // Set alarm for 20 to the hour
       RTC.setAlarm1("00:00:40:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:43:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 4: // Set alarm to 10 to the hour
       RTC.setAlarm1("00:00:50:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:53:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 5: // set alarm for the hour
       RTC.setAlarm1("00:00:00:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     default: // this should never happen... set alarm for 10 minutes
       RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
+      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE2);
       break;
     }
   //
