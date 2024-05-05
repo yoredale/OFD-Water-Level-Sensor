@@ -516,84 +516,165 @@ uint8_t joinOTAA()
 
 uint8_t writeDataToFile ()
 {
-  char data[26];
-  char convert[5];
-  // Generate the time information to record from the timestamp.
-  sprintf(convert, "%d", time.year);
-  strcat(data, convert);
-  strcat(data, "-");
-  sprintf(convert, "%d", time.month);
-  strcat(data, convert);
-  strcat(data, "-");
-  sprintf(convert, "%d", time.date);
-  strcat(data, convert);
-  strcat(data, " ");
-  sprintf(convert, "%d", time.hour);
-  strcat(data, convert);
-  strcat(data, ":"),
-  sprintf(convert, "%d", time.minute);
-  strcat(data, convert);
-  strcat(data, ":");
-  sprintf(convert, "%d", time.second);
-  strcat(data, convert);
-  strcat(data, ", ");
-  sprintf(convert, "%d", sensor_value);
-  strcat(data, convert);
+  uint8_t sd_answer;
+  // uint8_t flag;
+  char file_data[21] = "";
+  char convert[6] = "";
+  // Generate UTC ISO 8601 time record from the timestamp.
+  sprintf(convert, "20%d", time.year);
+  strcat(file_data, convert);
+  strcat(file_data, "-");
+  if (sprintf(convert, "%d", time.month) == 1)
+  {
+    sprintf(convert, "0%d", time.month);
+  }
+  strcat(file_data, convert);
+  strcat(file_data, "-");
+  if (sprintf(convert, "%d", time.date) == 1)
+  {
+    sprintf(convert, "0%d", time.date);
+  }
+  strcat(file_data, convert);
+  strcat(file_data, "T");
+  if (sprintf(convert, "%d", time.hour) == 1)
+  {
+    sprintf(convert, "0%d", time.hour);
+  }
+  strcat(file_data, convert);
+  strcat(file_data, ":");
+  if (sprintf(convert, "%d", time.minute) == 1)
+  {
+    sprintf(convert, "0%d", time.minute);
+  }
+  strcat(file_data, convert);
+  strcat(file_data, ":");
+  if (sprintf(convert, "%d", time.second) == 1)
+  {
+    sprintf(convert, "0%d", time.second);
+  }
+  strcat(file_data, convert);
+  strcat(file_data, "Z");
+  sprintf(convert, "%d\n", sensor_value);
   // Print the data line
-  USB.println(data);
+  USB.print(file_data);
+  USB.print(", ");
+  USB.println(convert);
+
   // Turn on the SD card
   SD.ON();
-  if (SD.isSD())
+  // check if there was any problem with the initialisation
+  if (SD.flag > 0)
+  {
+    USB.print ("The SD card failed to initialise, SD.flag is currently: ");
+    USB.println(SD.flag);
+    SD.OFF();
+    return SD.flag;
+  }
+  sd_answer = SD.isSD();
+  if (sd_answer == 0)
     {
-      char path[8];
-      sprintf(path, "%d", time.year);
-      char filename[3];
-      sprintf(filename, "%d", time.month);
-      if (SD.goRoot())
-	{
-	  if (!SD.isDir(path))
-	    {
-	      if (!SD.mkdir(path))
-		{
-		  // mkdir failed, return 3
-		  SD.OFF();
-		  return 3;
-		}
-	    }
-	  strcat(path, "/");
-	  strcat(path,filename);
-	  if (!SD.isFile(path)) 
-	    {
-	      if (!SD.create(path))
-		{
-		  // file creation failed, return 4
-		  SD.OFF();
-		  return 4;
-		}
-	    }
-	  if (!SD.appendln(path, data))
-	    {
-	      // append to file failed, return 5
-	      SD.OFF();
-	      return 5;
-	    }
-	}
-      else
-	{
-	  // failed to change to root directory, return 2
-	  SD.OFF();
-	  return 2;
-	}
-      // Write succeeded, return 0
+      // Card not Present
       SD.OFF();
-      return 0;
+      return SD.flag;
     }
+  //
+  // Card is present, so continue
+  // Set the filename for the data file.
+  // we set a new file for each month
+  // aka 24-04
+  char filename[6] = "";
+  if (time.month < 10)
+  {
+    sprintf(filename, "%d-0%d", time.year, time.month);
+  }
   else
+  {
+    sprintf(filename, "%d-%d", time.year, time.month);
+  }
+  USB.print("File Name: ");
+  USB.println(filename);
+  sd_answer = SD.goRoot();
+  if (sd_answer == 1)
+  {
+    USB.println("Got root directory");
+  }
+  else
+  {
+    // Changing to the root directory failed
+    USB.println("Failed to get root directory");
+    SD.OFF();
+    return SD.flag;
+  }
+  //
+  // Check if the file exists
+  sd_answer = SD.isFile(filename);
+  if (sd_answer == 1)
+  {
+    USB.println("File exists");    
+  }
+  else
+  {
+    USB.println("File does not exist");
+    //
+    // The file doesn't exist, so create it.
+    sd_answer = SD.create(filename);
+    if (sd_answer == 1)
     {
-      // Card not present, return 1
-      SD.OFF();
-      return 1;
+      USB.println("File created");
     }
+    else
+    {
+      // file creation failed, return 4
+      USB.println("File creation failed");
+      SD.OFF();
+     return SD.flag;
+    }
+  }
+  //
+  // If we've got this far, either the file
+  // already existed, or we've just succesfully
+  // created it.
+  sd_answer = SD.append(filename, file_data, 20);
+  if (sd_answer == 1)
+  {
+    USB.println("File append 1 succeded");
+  }
+  else
+  {
+    // append to file failed, return 5
+    USB.println("File append 1 failed");
+    SD.OFF();
+    return SD.flag;
+  }
+  sd_answer = SD.append(filename, ", ", 2);
+  if (sd_answer == 1)
+  {
+    USB.println("File append 2 succeded");
+  }
+  else
+  {
+    // append to file failed, return 5
+    USB.println("File append 2 failed");
+    SD.OFF();
+    return SD.flag;
+  }
+  sd_answer = SD.appendln(filename, convert);
+  if (sd_answer == 1)
+  {
+    USB.println ("File append 3 succeded");
+  }
+  else
+  {
+    // append to file failed, return 5
+    USB.println("File append 3 failed");
+    SD.OFF();
+    return SD.flag;
+  }
+  // Write succeeded, return 0
+  USB.println("File appends all succeeded");
+  SD.OFF();
+  return SD.flag;
+  //return 0;
 }
 
 
@@ -618,6 +699,8 @@ void loop()
   // Check the current time, if it's been more than a 4 weeks resync with the GPS.
   RTC.ON();
   sample_time = RTC.getEpochTime();
+ // Break Epoch time into UTC time
+  RTC.breakTimeAbsolute( sample_time, &time );
   RTC.OFF();
  
 
@@ -633,8 +716,7 @@ void loop()
   //
   // Send the frame over LoRaWAN
   sendFrame();
- // Break Epoch time into UTC time
-  RTC.breakTimeAbsolute( sample_time, &time );
+ 
   //
   // Set the interrrupt alarm for 10 minutes, divide the
   // current minutes past the hour by 10 to get the number
@@ -708,13 +790,12 @@ void loop()
     }
   //
   // Put Waspmote to sleep.
-  USB.print("Going to sleep uptil: ");
+  USB.print("Going to sleep until: ");
   USB.println(RTC.getAlarm1());
   PWR.sleep(ALL_OFF);
   if( intFlag & RTC_INT )
   {
     intFlag &= ~(RTC_INT); // Clear flag
-    Utils.blinkLEDs(1000); // Blinking LEDs
-    Utils.blinkLEDs(1000); // Blinking LEDs
+    Utils.blinkGreenLED(500);
   } 
 }
