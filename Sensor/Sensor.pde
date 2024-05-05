@@ -26,19 +26,16 @@
 #include <WaspFrame.h>
 #include <WaspLoRaWAN.h>
 
+// Include the configuration file
+#include "Sensor.h"
+
+
 // Define GPS Timeout
 #define GPS_TIMEOUT 240
 
 //////////////////////////////////////////////
 uint8_t socket = SOCKET0;
 //////////////////////////////////////////////
-
-// Device parameters for Back-End registration
-////////////////////////////////////////////////////////////
-char DEVICE_EUI[]  = "3b3940c71a6bdc59";
-char APP_EUI[] = "7268cd245c2ea59f";
-char APP_KEY[] = "1f3905f11c8c295ece8777dc8bba9eac";
-////////////////////////////////////////////////////////////
 
 // Define port to use in Back-End: from 1 to 223
 uint8_t PORT = 3;
@@ -53,7 +50,6 @@ timestamp_t   time;
 unsigned long time_sync = 0;
 unsigned long sample_time;
 uint16_t sensor_value;
-char moteID[] = "OFD1";
 char sensor_message[8];
 char data[17];
 
@@ -719,7 +715,23 @@ void loop()
   //
   // Send the frame over LoRaWAN
   sendFrame();
- 
+  switch (error)
+  {
+   case 5:
+     // Sending failed, try once more
+     sendFrame();
+     break;
+   case 6:
+     // Module not joined, try to join again, then resend the data
+     joinOTAA();
+     sendFrame();
+     break;
+   default:
+     // Carry on if it succeded or the problem was data length or the module not working
+     // if the module is not working there's not much we can do about it other than store
+     // the data locally.
+     break;
+  }
   //
   // Set the interrrupt alarm for 10 minutes, divide the
   // current minutes past the hour by 10 to get the number
@@ -760,51 +772,51 @@ void loop()
         if (time.minute >= 10)
         {
           RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-          RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+          RTC.setAlarm2("00:00:23",RTC_ABSOLUTE,RTC_ALM1_MODE4);
         }
         else
         {
           //
           // If we haven't updated the time then set the alarm for 10 past.
           RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-          RTC.setAlarm2("00:00:13:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+          RTC.setAlarm2("00:00:13",RTC_ABSOLUTE,RTC_ALM1_MODE4);
         }
       }
       else
       {
         RTC.setAlarm1("00:00:10:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-        RTC.setAlarm2("00:00:13:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+        RTC.setAlarm2("00:00:13",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       }
       break;
   
     case 1: // Set alarm for 20 past the hour
       RTC.setAlarm1("00:00:20:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:23",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 2: // Set alarm for half past the hour
       RTC.setAlarm1("00:00:30:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-      RTC.setAlarm2("00:00:33:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:33",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
       
     case 3: // Set alarm for 20 to the hour
       RTC.setAlarm1("00:00:40:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-      RTC.setAlarm2("00:00:43:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:43",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 4: // Set alarm to 10 to the hour
       RTC.setAlarm1("00:00:50:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-      RTC.setAlarm2("00:00:53:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:53",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     case 5: // set alarm for the hour
       RTC.setAlarm1("00:00:00:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
-      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE4);
+      RTC.setAlarm2("00:00:03",RTC_ABSOLUTE,RTC_ALM1_MODE4);
       break;
 
     default: // this should never happen... set alarm for 10 minutes
       RTC.setAlarm1("00:00:10:00",RTC_OFFSET,RTC_ALM1_MODE2);
-      RTC.setAlarm2("00:00:23:00",RTC_ABSOLUTE,RTC_ALM1_MODE2);
+      RTC.setAlarm2("00:00:23",RTC_ABSOLUTE,RTC_ALM1_MODE2);
       break;
     }
   //
